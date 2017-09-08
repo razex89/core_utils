@@ -9,7 +9,7 @@
 import socket
 import ssl
 from abc import abstractmethod
-from logger.logger import log, Level
+from core_utils.logger.logger import log, Level
 from ssl_files import consts as ssl_file_consts
 
 SSL_PROTOCOL = ssl.PROTOCOL_SSLv23
@@ -60,6 +60,14 @@ class SSLSocket(object):
         ssl_sock._sock = sock
         return ssl_sock
 
+    def set_timeout(self, seconds):
+        self._sock.settimeout(seconds)
+
+    def get_timeout(self):
+        return self._sock.gettimeout()
+
+
+
 
 class SSLClient(SSLSocket):
     """ implementation of SSLClient """
@@ -87,12 +95,17 @@ class SSLClient(SSLSocket):
             return self._sock.recv(buffer_length)
         except ssl.SSLError as ssl_error:
             log("Exception occurred when trying to receive data {exc}, returning empty string instead.".format(
-                exc=ssl_error),
-                Level.CRITICAL)
+            exc=ssl_error),
+            Level.CRITICAL)
+            raise ssl_error
+
 
     def close(self):
-        self._sock.close()
+        self._close()
         log("SOCKET has been closed", Level.INFO)
+
+    def _close(self):
+        self._sock.close()
 
 
 class SSLServer(SSLSocket):
