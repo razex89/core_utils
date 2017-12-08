@@ -1,1 +1,1 @@
-from logger import Level, log
+from logger import getLogger

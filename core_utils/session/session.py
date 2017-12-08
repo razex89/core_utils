@@ -9,7 +9,7 @@
 import socket
 import ssl
 from abc import abstractmethod
-from core_utils.logger.logger import log, Level
+from core_utils.logger import getLogger
 from ssl_files import consts as ssl_file_consts
 
 SSL_PROTOCOL = ssl.PROTOCOL_SSLv23
@@ -41,6 +41,7 @@ class SSLSocket(object):
         self._sock = None
         self._host = host
         self._port = port
+        self._logger = getLogger("{0},{1}:{2}".format(self.__class__, host, port))
 
     def send_data(self, data):
         self._sock.send(data)
@@ -66,25 +67,30 @@ class SSLSocket(object):
     def get_timeout(self):
         return self._sock.gettimeout()
 
+    def shutdown(self):
+        """
+        shut both halves of the connection.
+        """
 
+        self._sock.shutdown(socket.SHUT_RDWR)
 
 
 class SSLClient(SSLSocket):
     """ implementation of SSLClient """
 
-    SOCK_TIMEOUT = 15
     DEFAULT_BUFFER_LENGTH = 1024
 
     def __init__(self, host, port):
         super(SSLClient, self).__init__(host, port)
         self._sock = create_ssl_socket(False)
+        self.set_timeout(self.SOCK_TIMEOUT)
 
     def connect(self):
         try:
             self._sock.connect((self._host, self._port))
-            log("Successfully connected to server!", Level.INFO)
+            self._logger.info("Successfully connected to server!")
         except Exception as e:
-            log("Exception occurred! - {exc}".format(exc=e), Level.FATAL)
+            self._logger.fatal("Exception occurred! - {exc}".format(exc=e))
             raise e
 
     def send_data(self, data):
@@ -94,15 +100,14 @@ class SSLClient(SSLSocket):
         try:
             return self._sock.recv(buffer_length)
         except ssl.SSLError as ssl_error:
-            log("Exception occurred when trying to receive data {exc}, returning empty string instead.".format(
-            exc=ssl_error),
-            Level.CRITICAL)
+            self._logger.critical(
+                "Exception occurred when trying to receive data {exc}, returning empty string instead.".format(
+                    exc=ssl_error))
             raise ssl_error
-
 
     def close(self):
         self._close()
-        log("SOCKET has been closed", Level.INFO)
+        self._logger.info("SOCKET has been closed")
 
     def _close(self):
         self._sock.close()
@@ -114,12 +119,10 @@ class SSLServer(SSLSocket):
     DEFAULT_BACKLOG = 5
 
     def __init__(self, host, port, key_file=ssl_file_consts.PRIVATE_KEY, cert_file=ssl_file_consts.SERVER_CERTIFICATE):
-        super(SSLSocket, self).__init__()
+        super(SSLServer, self).__init__(host, port)
         self._sock = create_ssl_socket(True,
                                        key_file=key_file,
                                        cert_file=cert_file)
-        self._host = host
-        self._port = port
         self.init()
 
     def init(self):
@@ -130,12 +133,12 @@ class SSLServer(SSLSocket):
     def accept(self):
         try:
             sock, (ip, port) = self._sock.accept()
-            log("accepted {ip}:{port}".format(ip=ip, port=port), Level.INFO)
+            self._logger.info("accepted {ip},{port}".format(ip=ip, port=port))
+
             return SSLClient._convert_ssl_sock_to_SSLSocket(sock)
         except ssl.SSLError as e:
-            log("Exception occurred while accepting clients - {e}".format(e=e), Level.FATAL)
-
+            self._logger.fatal("Exception occurred while accepting clients - {e}".format(e=e))
 
     def close(self):
         self._sock.close()
-        log("SOCKET has been closed", Level.INFO)
+        self._logger.info("SOCKET has been closed")
